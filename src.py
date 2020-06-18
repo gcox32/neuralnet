@@ -44,20 +44,24 @@ class DenseLayer(object):
 
     def forward(self, inputs):
         self.inputs = inputs
-        self.output = np.dot(self.inputs, self.weights) + self.biases # weights and biases
+        self.output = np.dot(self.inputs, self.weights) + self.biases
         
     def activate(self, inputs):
         self.output = self.activation_function(self.output) # activation 
 
     def activation_function(self, inputs): # still need leaky ReLU, parametric ReLU, swish
+        # Remember input values
+        self.activationinputs = inputs
         if self.activation == 'relu':
             return np.maximum(0, inputs)
         elif self.activation == 'sigmoid' or self.activation == 'logistic':
             return 1/(1+np.exp(-inputs))
         elif self.activation == 'softmax':
-            expo = np.exp(inputs - inputs.max())
-            expo_sum = np.sum(np.exp(inputs))
-            return expo/expo_sum
+            # get unnormalized probabilities
+            exp_values = np.exp(inputs - np.max(inputs, axis=1, keepdims=True))
+            # normalize them for each sample
+            probabilities = exp_values / np.sum(exp_values, axis=1, keepdims=True)
+            return exp_values/probabilities
         elif self.activation == 'tanh' or self.activation == 'hyperbolic':
             tanh = (np.exp(inputs) - np.exp(-inputs))/(np.exp(inputs) + np.exp(-inputs))
             return tanh
@@ -65,29 +69,28 @@ class DenseLayer(object):
             return inputs
         else:
             Exception(f'{self.activation} is not a currently accepted activation function.')
-        self.inputs = np.array(inputs)
 
-    def backward(self):
+    def backward(self, dvalues):
         # Gradients on parameters
-        self.dweights = np.dot(self.inputs.T, self.dvalues)
-        self.dbiases = np.sum(self.dvalues, axis=0, keepdims=True)
+        self.dweights = np.dot(self.inputs.T, dvalues)
+        self.dbiases = np.sum(dvalues, axis=0, keepdims=True)
         # Gradient on values
-        self.dvalues = np.dot(self.dvalues, self.weights)
+        # print(dvalues.shape, self.weights.T.shape, self.inputs.shape)
+        self.dvalues = np.dot(dvalues, self.weights.T)
     
     def backwards_activation(self, dvalues):
         # Since we need to modify the original variable, let's make a copy of the values first
         self.dvalues = dvalues.copy()
-        print(self.dvalues.shape, self.inputs.shape)
         if self.activation == 'relu':
-            # Zero gradient where input values were negative 
-            self.dvalues[self.inputs <= 0] = 0
+            # Zero out gradient where input values were negative 
+            self.dvalues[self.activationinputs <= 0] = 0
         elif self.activation =='sigmoid' or self.activation == 'logistic':
-            sig = 1 / (1 + np.exp(-self.inputs))
+            sig = 1 / (1 + np.exp(-self.activationinputs))
             self.dvalues = sig * (1 - sig)
         elif self.activation == 'softmax':
             pass
         elif self.activation == 'tanh' or self.activation == 'hyperbolic':
-            tanh = (np.exp(self.inputs) - np.exp(-self.inputs))/(np.exp(self.inputs) + np.exp(-self.inputs))
+            tanh = (np.exp(self.activationinputs) - np.exp(-self.activationinputs))/(np.exp(self.activationinputs) + np.exp(-self.activationinputs))
             self.dvalues = 1 - tanh**2
         elif self.activation == None:
             pass 
@@ -108,6 +111,7 @@ class NeuralNetwork(object):
         except:
             self.optimizer = optimizer
         self.check_params()
+        self.iterations = 0
 
     def check_params(self):
         if self.loss not in self.loss_list:
@@ -130,11 +134,18 @@ class NeuralNetwork(object):
 
     def loss_function(self, y_pred, y_true):
         y_pred = np.clip(y_pred, 1e-7, 1 - 1e-7) # clip predictions to avoid zeros
-        samples = len(y_pred)        
+        samples = y_pred.shape[0]  
         if self.loss == 'categorical crossentropy':
-            y_pred = y_pred[range(samples), y_true]
+            # Probabilities for target values - only if categorical labels
+            if len(y_true.shape) == 1:
+                y_pred = y_pred[range(samples), y_true]
+            # Losses
             negative_log_likelihoods = -np.log(y_pred)
-            data_loss = np.mean(negative_log_likelihoods)
+            # Mask values - only for one-hot encoded labels
+            if len(y_true.shape) == 2:
+                negative_log_likelihoods *= y_true
+            # Overall loss
+            data_loss = np.sum(negative_log_likelihoods) / samples
             return data_loss
         elif self.loss == 'binary crossentropy':
             m = y_pred.shape[1]
@@ -158,47 +169,51 @@ class NeuralNetwork(object):
     def feedforward(self, layer_list, inputs, y_true, iteration):
 
         for layer in layer_list:
-            layer.weights += 0.05 * np.random.randn(layer.params()[0], layer.params()[1])
-            layer.biases += 0.05 * np.random.randn(1, layer.params()[1])
+            # forward pass X parameter
+            layer.forward(inputs)
 
-            for idx, layer in enumerate(layer_list):
-                layer.forward(inputs)
-                inputs = layer.output
+            # apply layer-specific activation function
+            layer.activate(layer.output)
+            inputs = layer.output
+            
+            # data has passed completely through the network
+            if layer.outputlayer == True:
 
-                layer.activate(inputs)
-                inputs = layer.output
-                
-                # data has passed completely through the network
-                if layer.outputlayer == True:
-                    data_loss = self.loss_function(inputs, y_true)
-                    accuracy = self.accuracy_function(inputs, y_true)
-                    # if the loss function, based on the current weights and biases produces a loss lower than the previous lowest
-                    # print at what iteration, what the log loss is, and what the accuracy is
-                    if data_loss < self.lowest_loss:
-                        print('New set of weights found, iteration:', iteration, 'loss:', data_loss, 'acc:', accuracy)
-                        self.lowest_loss = data_loss
+                # apply network-specific loss function
+                data_loss = self.loss_function(inputs, y_true)
+                accuracy = self.accuracy_function(inputs, y_true)
 
-                        # adjust the weights list and biases list with the current best weights and biases if such values produced
-                        # the best log loss for our input data 
-                        for ix, lay in enumerate(layer_list):
-                            self.weights_list[ix] = lay.weights
-                            self.biases_list[ix] = lay.biases
-                
-                    return layer.output
+                # if the loss function, based on the current weights and biases produces a loss lower than the previous lowest
+                # print at what iteration, what the log loss is, and what the accuracy is
+                if data_loss < self.lowest_loss:
+                    print('New set of weights found, iteration:', iteration, 'loss:', data_loss, 'acc:', accuracy)
+                    
+                    # set new loss standard
+                    self.lowest_loss = data_loss
+
+                    # adjust the weights list and biases list with the current best weights and biases if such values produced
+                    # the best log loss for our input data 
+                    for ix, lay in enumerate(layer_list):
+                        self.weights_list[ix] = lay.weights
+                        self.biases_list[ix] = lay.biases
+
+                # return final layer's output for back propogation through the network
+                return layer.output
 
     def back_prop(self, dvalues, layer_list, y_true):
+        # the derivative values first produced will be from reversing the loss function
         self.backward_loss(dvalues = dvalues, y_true = y_true)
-        # the derivative values first produced will be from reversing the loss function, which
-        # is part of the network, not just an individual layer
+
+        # establish first derivative values; once past the loss function, derivative values for a layer will come from the prior layer
         dvalues = self.dvalues
 
-        for i, layer in enumerate(layer_list[::-1]):
+        for layer in layer_list[::-1]:
             # reverse the activation function for the layer using its derivative
             layer.backwards_activation(dvalues=dvalues)
-            
-            # take the derivative of the weighting
-            layer.backward()
 
+            # take the derivative of the weighting
+            layer.backward(dvalues = layer.dvalues)
+            
             # establish input for next layer
             dvalues = layer.dvalues
 
@@ -215,19 +230,25 @@ class NeuralNetwork(object):
         else:
             raise Exception(f'{self.loss} is not a currently accepted loss function.')
 
-    def optimize(self, layer, learning_rate = 1.0):
+    def optimize(self, layer, learning_rate = 1.0, decay=0.1):
+        self.learning_rate = learning_rate
+        self.decay = decay
+        self.current_learning_rate = learning_rate
+
         if self.optimizer == 'adam':
             pass
         elif self.optimizer == 'sgd':
-            print('weights shape:',layer.weights.shape,'\ndweights shape:',layer.dweights.shape)
-            layer.weights += -learning_rate * layer.dweights
-            layer.biases += -learning_rate * layer.dbiases
+            if self.decay:
+                self.current_learning_rate = self.current_learning_rate * (1. / (1. + self.decay * self.iterations))
+            layer.weights += -self.current_learning_rate * layer.dweights
+            layer.biases += -self.current_learning_rate * layer.dbiases
+            self.iterations += 1
         elif self.optimizer == None:
             pass
         else:
             pass
 
-    def train(self, X, y_true, iterations = 1000):
+    def train(self, X, y_true, iterations = 1000, learning_rate = 1.0):
 
         # first check for key shape Exception where final layer output does not match the number of possible classes
         output_neurons = self.layers()[-1].params()[1]
@@ -247,17 +268,19 @@ class NeuralNetwork(object):
         # using a for loop, show the input data to architecture "iterations" number of times, slightly adjusting the weights
         # and biases with each pass
         for iteration in range(iterations):
-            print('start loop')
             inputs = X
 
             # feed forward through layers
             dvalues = self.feedforward(layer_list = layer_list, inputs = inputs, y_true = y_true, iteration = iteration)
-
+            
             # feed backward through layers
             self.back_prop(dvalues = dvalues, layer_list = layer_list, y_true = y_true)
 
-            # for layer in layer_list:
-            #     self.optimize(layer)
+            for idx, layer in enumerate(layer_list):
+                layer.weights = self.weights_list[idx]
+                layer.biases = self.biases_list[idx]
+                self.optimize(layer, learning_rate=learning_rate, decay=0)
+                self.iterations += 1
 
     def visualize(self):
         pass
