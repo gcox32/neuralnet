@@ -1,4 +1,4 @@
-<a href="http://www.kaleighcoxwriter.com"><img src="https://github.com/gcox32/neuralnet/blob/master/logo.png" title="grantcoxdatasci" alt="grantcoxdatasci"></a>
+<a href="http://www.kaleighcoxwriter.com"><img src="https://github.com/gcox32/neuralnet/blob/master/logo.png" title="grantcoxdatasci" alt="grantcoxdatasci" width="200"></a>
 
 <!-- [![FVCproductions](https://avatars1.githubusercontent.com/u/4284691?v=3&s=200)](http://fvcproductions.com) -->
 
@@ -76,12 +76,13 @@ Reach out to me at one of the following places!
 
 - There are worse places your money could go.
 
+<div>
 <form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_top">
 <input type="hidden" name="cmd" value="_s-xclick" />
 <input type="hidden" name="hosted_button_id" value="8Q5GJYTCGC4LL" />
 <input type="image" src="https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif" border="0" name="submit" title="PayPal - The safer, easier way to pay online!" alt="Donate with PayPal button" />
 <img alt="" border="0" src="https://www.paypal.com/en_US/i/scr/pixel.gif" width="1" height="1" />
 </form>
-
+</div>
 
 ---
