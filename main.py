@@ -1,6 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from src import create_data, DenseLayer, NeuralNetwork
+from sklearn.metrics import accuracy_score
+from sklearn.model_selection import train_test_split
+
 
 np.random.seed(15)
 
@@ -12,36 +15,43 @@ param2 = [i[1] for i in X]
 
 plot = False
 
+# display data
+if plot:
+    plt.scatter(param1, param2, c = y)
+    plt.show()
+
 arc = {
     'A': {
         'n_inputs': 2,
-        'n_neurons': 64,
-        'activation': 'relu',
+        'n_neurons': 16,
+        'activation': 'ReLu',
     },
     'B': {
-        'n_inputs': 64,
-        'n_neurons': 32,
-        'activation': 'relu',
+        'n_inputs': 16,
+        'n_neurons': 12,
+        'activation': 'ReLu',
     },
     'C': {
-        'n_inputs': 32,
-        'n_neurons': 64,
-        'activation': 'relu',
+        'n_inputs': 12,
+        'n_neurons': 16,
+        'activation': 'ReLu',
     },
     'output': {
-        'n_inputs': 64,
+        'n_inputs': 16,
         'n_neurons': 3,
-        'activation': 'relu',
+        'activation': 'Softmax',
     },
 }
 
 loss = 'categorical crossentropy'
 optimizer = 'SGD'
 
-net = NeuralNetwork(architecture=arc, loss=loss, optimizer=optimizer)
-net.train(X, y, iterations = 10000, learning_rate = 1.0)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
 
-# display data
-if plot:
-    plt.scatter(param1, param2, c = y)
-    plt.show()
+net = NeuralNetwork(architecture=arc, loss=loss, optimizer=optimizer)
+
+net.train(X_train, y_train, iterations = 10000, learning_rate = 1.0, decay = 0.0, momentum=None)
+
+print(accuracy_score(y_test, net.predict(X_test)))
+
+net.visualize_network()
