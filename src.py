@@ -4,31 +4,6 @@ from collections import Counter
 
 np.random.seed(15)
 
-def create_data(points, classes):
-    """
-    create spiral data set 
-    params
-    ----------
-    points (int) : number of points for each class
-    classes (int) : number of distinct classes, evenly distributed
-
-    returns
-    ---------
-    X (numpy array) : array of shape (points*classes, 2)
-    y (numpy array) : 1d array of classes
-    """
-    X = np.zeros((points*classes, 2))
-    y = np.zeros(points*classes, dtype='uint8')
-    
-    for class_number in range(classes):
-        ix = range(points*class_number, points*(class_number + 1))
-        r = np.linspace(0.0, 1, points) # radius
-        t = np.linspace(class_number * 4, (class_number + 1) * 4, points) + np.random.randn(points)*0.2
-        X[ix] = np.c_[r*np.sin(t*2.5), r*np.cos(t*2.5)]
-        y[ix] = class_number
-
-    return X, y
-
 class DenseLayer(object):
     """
     Densley connected layer.
@@ -108,6 +83,7 @@ class NeuralNetwork(object):
 
     loss_list = ['mse', 'categorical crossentropy', 'binary crossentropy']
     optimizer_list = ['adam', 'sgd', 'adaguard', None]
+    batch_list = ['batch', 'mini-batch', 'stochastic']
 
     def __init__(self, architecture, loss = 'categorical crossentropy', optimizer = 'Adam'):
         """   
@@ -124,11 +100,11 @@ class NeuralNetwork(object):
             self.optimizer = optimizer.lower()
         except:
             self.optimizer = optimizer
-        self.check_params()
         self.iterations = 0
-
         # run .layers() at init to produce .nodes_list attribute
         self.layers()
+        
+        self.check_params()
 
     def check_params(self):
         """
@@ -139,10 +115,17 @@ class NeuralNetwork(object):
             raise Exception(f'{self.loss} is not a recognized loss function.')
         if self.optimizer not in self.optimizer_list:
             raise Exception(f'{self.optimizer} is not a recognized optimizer.')
+        for idx, (i, n) in enumerate(zip(self.inputs_list, self.nodes_list[1:])):
+            if idx == 0:
+                corr = i
+            if i != corr:
+                raise Exception(f'Check your architecture. Inputs of any non-first layer need to equal the neuron count of the prior layer. {i} inputs in layer {idx + 1} does not mesh with the {corr} neurons from layer {idx}.')
+            corr = n    
 
     def layers(self):
         layer_list = []
-        self.nodes_list = [] # used for visualization method
+        self.inputs_list = [] # used for .check_params() method at initialization
+        self.nodes_list = [] # used for visualization method and .check_params() at initialization
         self.activations_list = [None] # used for visualization method
         for idx, val in enumerate(self.architecture.values()):
             params = []
@@ -150,6 +133,7 @@ class NeuralNetwork(object):
                 params.append(i)
             if idx == 0:
                 self.nodes_list.append(params[0]) # add inputs of first layer as initial neurons
+            self.inputs_list.append(params[0])
             self.nodes_list.append(params[1]) # add neurons from every layer including first layer
             self.activations_list.append(params[2])
             try:   
@@ -303,13 +287,23 @@ class NeuralNetwork(object):
             layer.weights += weight_updates
             layer.biases += bias_updates
         elif self.optimizer == 'adagrad':
-            pass
+            eps = 1e-7 # epsilon, a very small value to keep from zeroing out
+            # if layer does not contain cache arrays, create ones filled with zeros
+            if not hasattr(layer, 'weight_cache'):
+                layer.weight_cache = np.zeros_like(layer.weights)
+                layer.bias_cache = np.zeros_like(layer.biases)
+            # update cache with squared current gradients
+            layer.weight_cache += layer.dweights**2
+            layer.bias_cache += layer.dbiases**2
+            # vanilla sgd parameter update + normalization with square rooted cache
+            layer.weights += -self.current_learning_rate * layer.dweights / (np.sqrt(layer.weight_cache) + eps)
+            layer.biases += -self.current_learning_rate * layer.dbiases / (np.sqrt(layer.bias_cache) + eps)
         elif self.optimizer == None:
             pass
         else:
             pass
 
-    def train(self, X, y_true, iterations = 1000, learning_rate = 1.0, decay = 0.0, momentum = None):
+    def train(self, X, y_true, iterations = 1000, learning_rate = 1.0, decay = 0.0, momentum = None, batch_mode = 'batch mode', batch_size = None):
         """
         Using the power of loops, passes the input data (X), forward through the layers, assesses the data loss and the accuracy of
         the predictions relative to y_true, then back propogates through the layers using .backprop() method, then calls the .optimize()
@@ -331,6 +325,21 @@ class NeuralNetwork(object):
         ----------
 
         """
+        # establish batch parameters
+        self.batch_mode = batch_mode.lower()
+
+        if self.batch_mode == 'stochastic':
+            self.batch_size = 1
+        elif self.batch_mode == 'batch mode':
+            self.batch_size = X.shape[0]
+        elif batch_size and type(batch_size) == int:
+            self.batch_size = batch_size
+        
+        batch_list = []
+        for idx in range(0, X.shape[0], batch_size):
+            batch = X[idx:min(idx + batch_size, X.shape[0]), :]
+            batch_list.append(batch)
+
         # first check for key shape Exception where final layer output does not match the number of possible classes
         output_neurons = self.layers()[-1].params()[1]
         class_count = len(Counter(y_true).keys())
@@ -486,3 +495,11 @@ class NeuralNetwork(object):
                 raise Exception('savename parameter needs to either be a string or set to False.')
             plt.savefig(savename + '.png')
         plt.show()
+
+    def save(self, filepath):
+        # find a way to save this model, trained or untrained
+        pass
+
+    def load(self, filepath):
+        # find a way to load a model, trained or untrained
+        pass

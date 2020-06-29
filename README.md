@@ -72,7 +72,7 @@ Reach out to me at one of the following places!
 
 ---
 
-## Donations (Optional)
+## Donations
 
 - There are worse places your money could go.
 
