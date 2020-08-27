@@ -1,0 +1,20 @@
+<html>
+   <body>
+      <h1>ANN</h1>
+      <h2>Upload Inputs</h2>
+      <form action = "http://localhost:5000/upload" method = "POST" 
+         enctype = "multipart/form-data">
+         <input type = "file" name = "inputs" />
+         <input type = "submit"/>
+      </form>
+      <h2>Upload Classes</h2>
+      <!-- <form action = "http://localhost:5000/upload" method = "POST" 
+         enctype = "multipart/form-data">
+         <input type = "file" name = "classes" />
+         <input type = "submit"/>
+      </form> -->
+      {% for msg in get_flashed_messages() %}
+      {{ msg }}
+      {% endfor %}
+   </body>
+</html>

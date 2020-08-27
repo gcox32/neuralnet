@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from collections import Counter
+import json
 
 np.random.seed(15)
 
@@ -101,6 +102,7 @@ class NeuralNetwork(object):
         except:
             self.optimizer = optimizer
         self.iterations = 0
+
         # run .layers() at init to produce .nodes_list attribute
         self.layers()
         
@@ -187,7 +189,7 @@ class NeuralNetwork(object):
         y_true (1d array) :
         iteration (int) :
 
-        returns
+        updates
         -----------
         layer.output (array) : DenseLayer().output from the final layer of the architecture
         """
@@ -303,7 +305,10 @@ class NeuralNetwork(object):
         else:
             pass
 
-    def train(self, X, y_true, iterations = 1000, learning_rate = 1.0, decay = 0.0, momentum = None, batch_mode = 'batch mode', batch_size = None):
+    def train(self, X, y_true, iterations = 1000, 
+            learning_rate = 1.0, decay = 0.0, momentum = None, 
+            batch_mode = 'batch mode', batch_size = None, 
+            stall_limit = 1500):
         """
         Using the power of loops, passes the input data (X), forward through the layers, assesses the data loss and the accuracy of
         the predictions relative to y_true, then back propogates through the layers using .backprop() method, then calls the .optimize()
@@ -336,8 +341,8 @@ class NeuralNetwork(object):
             self.batch_size = batch_size
         
         batch_list = []
-        for idx in range(0, X.shape[0], batch_size):
-            batch = X[idx:min(idx + batch_size, X.shape[0]), :]
+        for idx in range(0, X.shape[0], self.batch_size):
+            batch = X[idx:min(idx + self.batch_size, X.shape[0]), :]
             batch_list.append(batch)
 
         # first check for key shape Exception where final layer output does not match the number of possible classes
@@ -364,6 +369,10 @@ class NeuralNetwork(object):
         self.learning_rate = learning_rate
         self.momentum = momentum
         
+        # establish stalled accuracy counters
+        increase_list = []
+        stall_counter = 0
+
         # using a for loop, show the input data to architecture "iterations" number of times, slightly adjusting the weights
         # and biases with each pass
         for iteration in range(iterations):
@@ -381,8 +390,35 @@ class NeuralNetwork(object):
                 self.optimize(layer)
 
             self.learning_rate_list.append(self.current_learning_rate)
+
+            # check for stall limit
+            if stall_limit:
+
+                # increment stall counter if percent accuracy increase is less than 1%
+                perc_increase = (self.accuracy_list[iteration] - self.accuracy_list[iteration - 1]) / self.accuracy_list[iteration - 1]
+                increase_list.append(perc_increase)
+                
+                # take rolling average of percent increases
+                tailsize = 100
+                if iteration < 100:
+                    tailsize = iteration
+
+                # increment counter if improvement is less than 1%, other wise reset counter
+                avg_improvement = np.mean(increase_list[-tailsize:])
+                if avg_improvement < 0.01 and iteration > 2 * stall_limit:
+                    stall_counter += 1
+                else:
+                    stall_counter = 0
+                
+                # halt loop if accuracy hasn't increased by more than 1 percent in x number of iterations in a row
+                if stall_counter == stall_limit:
+                    print(f'Rolling average accuracy has not increased by more than 1 percent for the last {stall_limit} iterations, so training was halted at iteration {iteration}.',
+                    f'Training accuracy: {self.accuracy_list[-1]}')
+                    break
+
             self.iterations += 1
 
+        # save layer list with updated weights and biases as trained network
         self.trained_network = layer_list
 
     def visualize_validation(self):
@@ -425,11 +461,8 @@ class NeuralNetwork(object):
         """
         Draw a neural network cartoon using matplotilb.
         
-        :usage:
-            >>> fig = plt.figure(figsize=(12, 12))
-            >>> draw_neural_net(fig.gca(), .1, .9, .1, .9, [4, 7, 2])
-        
-        :parameters:
+        params
+        ------------
             - ax : matplotlib.axes.AxesSubplot
                 The axes on which to plot the cartoon (get e.g. by plt.gca())
             - left : float
@@ -462,6 +495,7 @@ class NeuralNetwork(object):
             for m in range(layer_size):
                 circle = plt.Circle((n * h_spacing + left, layer_top - m * v_spacing), v_spacing/4.,
                                     color='w', ec='k', zorder=4)
+                # input / output text
                 if n == 0:
                     plt.text(left - 0.15, layer_top - m * v_spacing, r'$X_{' + str(m + 1) + '}$', fontsize=15)
                 elif (n_layers == 3) & (n == 1):
@@ -497,9 +531,52 @@ class NeuralNetwork(object):
         plt.show()
 
     def save(self, filepath):
-        # find a way to save this model, trained or untrained
-        pass
+        """
+        save weights and biases unique to this network's architecture
+
+        params
+        ------------
+        filepath (str) : a .json file path  to which weights and biases can be saved
+
+        returns
+        -----------
+        file (.json) : a dictionary of weights and biases that correspond with the structure of this network
+            to be reloaded in, skipping training time
+        """
+        network = {}
+        for i, layer in enumerate(self.trained_network):
+            weights = layer.weights
+            biases = layer.biases
+
+            # add layer to dictionary with corresponding weights/biases
+            network[str(i)] = {'weights': weights.tolist(),
+                               'biases': biases.tolist()}
+
+        with open(filepath, 'w') as outfile:
+            json.dump(network, outfile, sort_keys=True, indent=4)
 
     def load(self, filepath):
-        # find a way to load a model, trained or untrained
-        pass
+        """
+        load in and attach weights and biases to an architecture to skip training time
+
+        params
+        ------------
+        filepath (str) : a .json file, presumably the output of the .save() method, containing a dictionary of 
+            weights and biases lists for each layer
+        
+        updates
+        -----------
+        self.trained_model : attaches the weights and biases loaded in to the appropriate synapses/nodes of each 
+            layer in the model
+        """
+        with open(filepath, 'r') as outfile:
+            network = json.load(outfile)
+        
+        # loop through network dict, where each key is a layer
+        layer_list = []
+        for (_, value), layer in zip(network.items(), self.layers()):
+            layer.weights = value['weights']
+            layer.biases = value['biases']
+            layer_list.append(layer)
+
+        self.trained_network = layer_list

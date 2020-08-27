@@ -1,6 +1,4 @@
-<a href="http://www.kaleighcoxwriter.com"><img src="https://github.com/gcox32/neuralnet/blob/master/logo.png" title="grantcoxdatasci" alt="grantcoxdatasci" width="200"></a>
-
-<!-- [![FVCproductions](https://avatars1.githubusercontent.com/u/4284691?v=3&s=200)](http://fvcproductions.com) -->
+<a href="http://www.kaleighcoxwriter.com"><img src="https://github.com/gcox32/neuralnet/blob/master/assets/logo.png" title="grantcoxdatasci" alt="grantcoxdatasci" width="200"></a>
 
 # Build a Neural Network from the Ground Up
 

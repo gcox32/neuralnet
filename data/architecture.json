@@ -1,0 +1,22 @@
+{
+    "A": {
+        "n_inputs": 2,
+        "n_neurons": 16,
+        "activation": "ReLu"
+    },
+    "B": {
+        "n_inputs": 16,
+        "n_neurons": 8,
+        "activation": "ReLu"
+    },
+    "C": {
+        "n_inputs": 8,
+        "n_neurons": 16,
+        "activation": "ReLu"
+    },
+    "output": {
+        "n_inputs": 16,
+        "n_neurons": 3,
+        "activation": "Softmax"
+    }
+}
