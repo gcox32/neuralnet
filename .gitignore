@@ -5,3 +5,6 @@
 # ignore python stuff
 *.DS_Store
 __pycache__
+
+# node modules
+node_modules

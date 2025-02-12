@@ -757,6 +757,37 @@ class NeuralNetwork(object):
         plt.title(title)
         plt.show()
 
+    def get_training_metrics(self) -> dict:
+        """
+        Returns training metrics in a web-friendly format
+        """
+        if self.iterations == 0:
+            raise Exception("Network hasn't been trained yet.")
+        
+        return {
+            'iterations': list(range(self.iterations)),
+            'loss': self.data_loss_list,
+            'accuracy': self.accuracy_list,
+            'learning_rate': self.learning_rate_list
+        }
+    
+    def get_network_structure(self) -> dict:
+        """ 
+        Returns network architecture in a format suitable for visualization
+        """
+        return {
+            'layers': self.nodes_list,
+            'activations': self.activations_list,
+            'connections': [
+            {
+                'from_layer': i,
+                'to_layer': i + 1,
+                'weights': layer.weights.tolist()
+            }
+                for i, layer in enumerate(self.layers())
+            ]
+        }
+
 @dataclass
 class TrainingConfig:
     learning_rate: float = 1.0
