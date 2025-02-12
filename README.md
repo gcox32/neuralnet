@@ -1,9 +1,6 @@
-<a href="http://www.letmedemo.com"><img src="https://github.com/gcox32/neuralnet/blob/master/assets/logo.png" title="grantcoxdatasci" alt="grantcoxdatasci" width="200"></a>
-
 # Build a Neural Network from the Ground Up
 
-> A Python implementation of a neural network built from scratch, with both a core library and web interface.
-
+> You should know what's in your model. Train locally.
 ## Features
 
 - Custom neural network implementation with:
