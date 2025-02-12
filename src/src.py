@@ -2,14 +2,25 @@ import numpy as np
 import matplotlib.pyplot as plt
 from collections import Counter
 import json
+from typing import Optional
+from dataclasses import dataclass
 
 np.random.seed(15)
-
 class DenseLayer(object):
     """
     Densley connected layer.
     """
-    def __init__(self, n_inputs, n_neurons, activation):
+    ACTIVATION_FUNCTIONS = {
+        'relu': lambda x: np.maximum(0, x),
+        'leaky_relu': lambda x: np.where(x > 0, x, x * 0.01),
+        'elu': lambda x: np.where(x > 0, x, np.exp(x) - 1),
+        'sigmoid': lambda x: 1 / (1 + np.exp(-x)),
+        'tanh': lambda x: np.tanh(x),
+        'softmax': lambda x: np.exp(x) / np.sum(np.exp(x), axis=1, keepdims=True),
+        None: lambda x: x
+    }
+
+    def __init__(self, n_inputs: int, n_neurons: int, activation: Optional[str] = None) -> None:
         self.n_inputs = n_inputs
         self.n_neurons = n_neurons
         self.weights = 0.1 * np.random.randn(n_inputs, n_neurons)
@@ -20,73 +31,134 @@ class DenseLayer(object):
             self.activation = None
         self.outputlayer = False
 
-    def forward(self, inputs):
+    def forward(self, inputs: list) -> None:
+        """
+        Forward pass of the layer.
+        
+        Parameters
+        ----------
+        inputs : ndarray
+            Input values to the layer, shape (n_samples, n_inputs)
+        
+        Updates
+        -------
+        self.inputs : ndarray
+            Stores input values for use in backpropagation
+        self.output : ndarray
+            Computed output before activation, shape (n_samples, n_neurons)
+        """
         self.inputs = inputs
         self.output = np.dot(self.inputs, self.weights) + self.biases
         
-    def activate(self, inputs):
+    def activate(self) -> None:
+        """
+        Applies the layer's activation function to the inputs.
+        
+        Parameters
+        ----------
+        inputs : ndarray
+            Input values to be activated
+            
+        Updates
+        -------
+        self.output : ndarray
+            Activated output values
+        """
         self.output = self.activation_function(self.output) # activation 
 
-    def activation_function(self, inputs): # still need leaky ReLU, parametric ReLU, swish
+    def activation_function(self, inputs: list) -> list:
+        """
+        Applies the specified activation function to the inputs
+
+        -----
+        Supported activation functions:
+        - ReLU: max(0, x)
+        - Leaky ReLU: x if x > 0 else 0.01x
+        - ELU: x if x > 0 else (e^x - 1)
+        - Sigmoid: 1/(1 + e^(-x))
+        - Softmax: e^x_i/Σe^x_j
+        - Tanh: (e^x - e^(-x))/(e^x + e^(-x))
+        """
         # Remember input values
         self.activationinputs = inputs
-        if self.activation == 'relu':
-            return np.maximum(0, inputs)
-        elif self.activation == 'sigmoid' or self.activation == 'logistic':
-            return 1 / (1 + np.exp(-inputs))
-        elif self.activation == 'softmax':
-            # get unnormalized probabilities
-            exp_values = np.exp(inputs - np.max(inputs, axis=1, keepdims=True))
-            # normalize them for each sample
-            probabilities = exp_values / np.sum(exp_values, axis=1, keepdims=True)
-            return probabilities
-        elif self.activation == 'tanh' or self.activation == 'hyperbolic':
-            tanh = (np.exp(inputs) - np.exp(-inputs))/(np.exp(inputs) + np.exp(-inputs))
-            return tanh
-        elif self.activation == None:
-            return inputs
-        else:
-            Exception(f'{self.activation} is not a currently accepted activation function.')
+        try:
+            return self.ACTIVATION_FUNCTIONS[self.activation](inputs)
+        except KeyError:
+            raise ValueError(f'{self.activation} is not a currently accepted activation function.')
 
-    def backward(self, dvalues):
+    def backward(self, dvalues: list) -> None:
+        """
+        Calculates gradients of weights, biases, and inputs.
+        
+        Parameters
+        ----------
+        dvalues : ndarray
+            Gradient of the loss function with respect to layer outputs
+            
+        Updates
+        -------
+        self.dweights : ndarray
+            Gradient of the loss with respect to weights
+        self.dbiases : ndarray
+            Gradient of the loss with respect to biases
+        self.dvalues : ndarray
+            Gradient of the loss with respect to layer inputs
+        """
         # Gradients on parameters
         self.dweights = np.dot(self.inputs.T, dvalues)
+
+        # Add L2 regularization if specified
+        if hasattr(self, 'l2_lambda') and self.l2_lambda > 0:
+            self.dweights += self.l2_lambda * self.weights
+
         self.dbiases = np.sum(dvalues, axis=0, keepdims=True)
         # Gradient on values
         # print(dvalues.shape, self.weights.T.shape, self.inputs.shape)
         self.dvalues = np.dot(dvalues, self.weights.T)
     
-    def backwards_activation(self, dvalues):
+    def backwards_activation(self, dvalues: list) -> None:
+        """
+        Calculates gradients of activation function
+
+        Notes
+        -----
+        Derivatives:
+        - ReLU: 1 if x > 0 else 0
+        - Leaky ReLU: 1 if x > 0 else 0.01
+        - ELU: 1 if x > 0 else e^x
+        - Sigmoid: s(x)(1 - s(x)) where s(x) is sigmoid
+        - Tanh: 1 - tanh^2(x)
+        """
         # Since we need to modify the original variable, let's make a copy of the values first
         self.dvalues = dvalues.copy()
         if self.activation == 'relu':
             # Zero out gradient where input values were negative 
             self.dvalues[self.activationinputs <= 0] = 0
-        elif self.activation =='sigmoid' or self.activation == 'logistic':
+        elif self.activation == 'leaky_relu':
+            self.dvalues[self.activationinputs <= 0] *= 0.01
+        elif self.activation == 'elu':
+            self.dvalues[self.activationinputs <= 0] *= np.exp(self.activationinputs[self.activationinputs <= 0])
+        elif self.activation == 'sigmoid' or self.activation == 'logistic':
             sig = 1 / (1 + np.exp(-self.activationinputs))
             self.dvalues = sig * (1 - sig)
-        elif self.activation == 'softmax':
-            pass
         elif self.activation == 'tanh' or self.activation == 'hyperbolic':
-            tanh = (np.exp(self.activationinputs) - np.exp(-self.activationinputs))/(np.exp(self.activationinputs) + np.exp(-self.activationinputs))
-            self.dvalues = 1 - tanh**2
+            self.dvalues = 1 - np.tanh(self.activationinputs)**2
         elif self.activation == None:
             pass 
 
-    def params(self):
+    def params(self) -> list:
         return [self.n_inputs, self.n_neurons, self.activation]
 
 class NeuralNetwork(object):
     """
     Network.
-
     """
 
-    loss_list = ['mse', 'categorical crossentropy', 'binary crossentropy']
-    optimizer_list = ['adam', 'sgd', 'adaguard', None]
-    batch_list = ['batch', 'mini-batch', 'stochastic']
+    VALID_LOSS_FUNCTIONS = {'mse', 'categorical crossentropy', 'binary crossentropy'}
+    VALID_OPTIMIZERS = {'adam', 'sgd', 'adaguard', None}
+    VALID_BATCH_MODES = {'batch', 'mini-batch', 'stochastic'}
 
-    def __init__(self, architecture, loss = 'categorical crossentropy', optimizer = 'Adam'):
+    def __init__(self, architecture: dict, loss: str = 'categorical crossentropy', optimizer: str = 'Adam'):
         """   
         params
         ----------
@@ -108,14 +180,14 @@ class NeuralNetwork(object):
         
         self.check_params()
 
-    def check_params(self):
+    def check_params(self) -> None:
         """
         performs initial check of loss function and optimizer to make sure they are built into code before
         attempting to train data
         """
-        if self.loss not in self.loss_list:
+        if self.loss not in self.VALID_LOSS_FUNCTIONS:
             raise Exception(f'{self.loss} is not a recognized loss function.')
-        if self.optimizer not in self.optimizer_list:
+        if self.optimizer not in self.VALID_OPTIMIZERS:
             raise Exception(f'{self.optimizer} is not a recognized optimizer.')
         for idx, (i, n) in enumerate(zip(self.inputs_list, self.nodes_list[1:])):
             if idx == 0:
@@ -124,7 +196,10 @@ class NeuralNetwork(object):
                 raise Exception(f'Check your architecture. Inputs of any non-first layer need to equal the neuron count of the prior layer. {i} inputs in layer {idx + 1} does not mesh with the {corr} neurons from layer {idx}.')
             corr = n    
 
-    def layers(self):
+    def layers(self) -> list:
+        """
+        Creates layer instances based on network architecture.
+        """
         layer_list = []
         self.inputs_list = [] # used for .check_params() method at initialization
         self.nodes_list = [] # used for visualization method and .check_params() at initialization
@@ -146,49 +221,46 @@ class NeuralNetwork(object):
         
         return layer_list
 
-    def loss_function(self, y_pred, y_true):
+    def loss_function(self, y_pred: list, y_true: list) -> float:
         y_pred = np.clip(y_pred, 1e-7, 1 - 1e-7) # clip predictions to avoid zeros
         samples = y_pred.shape[0]  
+        
+        # Calculate base loss
         if self.loss == 'categorical crossentropy':
-            # Probabilities for target values - only if categorical labels
             if len(y_true.shape) == 1:
                 y_pred = y_pred[range(samples), y_true]
-            # Losses
             negative_log_likelihoods = -np.log(y_pred)
-            # Mask values - only for one-hot encoded labels
             if len(y_true.shape) == 2:
                 negative_log_likelihoods *= y_true
-            # Overall loss
             data_loss = np.sum(negative_log_likelihoods) / samples
-            return data_loss
         elif self.loss == 'binary crossentropy':
             m = y_pred.shape[1]
             y_true = y_true.reshape(-1, m)
             cost = -1 / m * (np.dot(y_true, np.log(y_pred).T) + np.dot(1 - y_true, np.log(1 - y_pred).T))
-            return np.mean(cost)
+            data_loss = np.mean(cost)
         elif self.loss == 'mse' or self.loss == 'mean squared error':
             sum_square_error = 0.0
             for i in range(len(y_true)):
                 sum_square_error += (y_true[i] - y_pred[i]) ** 2
-            mean_square_error = 1.0 / len(y_true) * sum_square_error
-            return np.mean(mean_square_error)
+            data_loss = 1.0 / len(y_true) * sum_square_error
         else:
             raise Exception(f'{self.loss} is not a currently accepted loss function.')
+        
+        # Add L2 regularization if specified
+        reg_loss = 0
+        if hasattr(self, 'l2_lambda') and self.l2_lambda > 0:
+            for layer in self.trained_network:
+                reg_loss += self.l2_lambda * np.sum(layer.weights * layer.weights)
+        
+        return data_loss + reg_loss
     
-    def accuracy_function(self, y_pred, y_true):
+    def accuracy_function(self, y_pred: list, y_true: list) -> float:
         predictions = np.argmax(y_pred, axis = 1)
         accuracy = np.mean(predictions == y_true)
         return accuracy
 
-    def feedforward(self, layer_list, inputs, y_true):
+    def feedforward(self, layer_list: list, inputs: list, y_true: list) -> list:
         """
-        params
-        -----------
-        layer_list (list) : 
-        inputs (array) : 
-        y_true (1d array) :
-        iteration (int) :
-
         updates
         -----------
         layer.output (array) : DenseLayer().output from the final layer of the architecture
@@ -198,7 +270,7 @@ class NeuralNetwork(object):
             layer.forward(inputs)
 
             # apply layer-specific activation function
-            layer.activate(layer.output)
+            layer.activate()
             inputs = layer.output
             
             # data has passed completely through the network
@@ -228,7 +300,7 @@ class NeuralNetwork(object):
                 # return final layer's output for back propogation through the network
                 return layer.output
 
-    def back_prop(self, dvalues, layer_list, y_true):
+    def back_prop(self, dvalues: list, layer_list: list, y_true: list) -> None:
         # the derivative values first produced will be from reversing the loss function
         self.backward_loss(dvalues = dvalues, y_true = y_true)
 
@@ -245,7 +317,7 @@ class NeuralNetwork(object):
             # establish input for next layer
             dvalues = layer.dvalues
 
-    def backward_loss(self, dvalues, y_true):
+    def backward_loss(self, dvalues: list, y_true: list) -> None:
         samples = dvalues.shape[0]
         self.dvalues = dvalues.copy()  # Copy so we can safely modify
         if self.loss == 'categorical crossentropy':
@@ -258,19 +330,60 @@ class NeuralNetwork(object):
         else:
             raise Exception(f'{self.loss} is not a currently accepted loss function.')
 
-    def optimize(self, layer):
+    @property
+    def current_learning_rate(self) -> float:
         """
-        updates the weights and biases of each neuron upon the next pass based on derivative weights and biases received
-        from back propogation
+        Calculate current learning rate based on decay and iterations.
+        
+        Returns
+        -------
+        float
+            Current learning rate value
         """
-
-        self.current_learning_rate = self.learning_rate
-
         if self.decay:
-            self.current_learning_rate = self.current_learning_rate * (1. / (1. + self.decay * self.iterations))
+            return self.learning_rate * (1. / (1. + self.decay * self.iterations))
+        return self.learning_rate
+
+    def optimize(self, layer: DenseLayer) -> None:
+        """
+        Updates the weights and biases using the chosen optimizer
+        """
 
         if self.optimizer == 'adam':
-            pass
+            # Adam parameters
+            beta1 = 0.9
+            beta2 = 0.999
+            epsilon = 1e-7
+
+            # Initialize momentum and cache if not exists
+            if not hasattr(layer, 'weight_momentums'):
+                layer.weight_momentums = np.zeros_like(layer.weights)
+                layer.weight_cache = np.zeros_like(layer.weights)
+                layer.bias_momentums = np.zeros_like(layer.biases)
+                layer.bias_cache = np.zeros_like(layer.biases)
+                layer.iteration = 0
+
+            layer.iteration += 1
+
+            # Update momentum with current gradients
+            layer.weight_momentums = beta1 * layer.weight_momentums + (1 - beta1) * layer.dweights
+            layer.bias_momentums = beta1 * layer.bias_momentums + (1 - beta1) * layer.dbiases
+            
+            # Get corrected momentum
+            weight_momentums_corrected = layer.weight_momentums / (1 - beta1 ** layer.iteration)
+            bias_momentums_corrected = layer.bias_momentums / (1 - beta1 ** layer.iteration)
+            
+            # Update cache with squared current gradients
+            layer.weight_cache = beta2 * layer.weight_cache + (1 - beta2) * layer.dweights**2
+            layer.bias_cache = beta2 * layer.bias_cache + (1 - beta2) * layer.dbiases**2
+            
+            # Get corrected cache
+            weight_cache_corrected = layer.weight_cache / (1 - beta2 ** layer.iteration)
+            bias_cache_corrected = layer.bias_cache / (1 - beta2 ** layer.iteration)
+
+            # Vanilla SGD parameter update + normalization with square rooted cache
+            layer.weights += -self.current_learning_rate * weight_momentums_corrected / (np.sqrt(weight_cache_corrected) + epsilon)
+            layer.biases += -self.current_learning_rate * bias_momentums_corrected / (np.sqrt(bias_cache_corrected) + epsilon)
         elif self.optimizer == 'sgd':
             if self.momentum:
                 # if layer does not contain momentum arrays, create them, filled with zeros
@@ -305,33 +418,42 @@ class NeuralNetwork(object):
         else:
             pass
 
-    def train(self, X, y_true, iterations = 1000, 
-            learning_rate = 1.0, decay = 0.0, momentum = None, 
-            batch_mode = 'batch mode', batch_size = None, 
-            stall_limit = 1500):
+    def train(self, X: list, y_true: list, X_val: Optional[list] = None, y_val: Optional[list] = None, l2_lambda: float = 0.0, iterations: int = 1000, 
+            learning_rate=1.0, decay=0.0, momentum=None, 
+            batch_mode='batch mode', batch_size=None, 
+            patience=5):
         """
-        Using the power of loops, passes the input data (X), forward through the layers, assesses the data loss and the accuracy of
-        the predictions relative to y_true, then back propogates through the layers using .backprop() method, then calls the .optimize()
-        method to adjust the weights and biases of each neuron in each layer. Adjust iterations to increase/decrease training time; 
-        adjust learning_rate and decay to adjust speed across iterations.
-
-        params
+        Train the neural network with optional early stopping based on validation loss.
+        
+        Parameters
         ----------
-        X (array) : input data
-        y_true (1d array) : "ground truth"; classes to compare outputs against
-        iterations (int) : number of times to show input data to the network 
-        learning_rate (float) : passed into .optimize() method; typically a float between 0.0 and 1.0; the degree to which dervative values
-            affect the weights and biases of each neuron upon the next pass
-        decay (float) : passed into .optimize() method; typically a float between 0.0 and 1.0 where 1 - decay is the degree to which the
-            learning rate is multiplied with each iteration
-        momentum (float) : 
-
-        updates
-        ----------
-
+        X : ndarray
+            Training input data
+        y_true : ndarray
+            Training target values
+        X_val : ndarray, optional
+            Validation input data
+        y_val : ndarray, optional
+            Validation target values
+        patience : int, default=5
+            Number of epochs to wait for validation loss improvement before stopping
         """
+        # Initialize training parameters
+        self.batch_mode = batch_mode.lower()
+        self.l2_lambda = l2_lambda
+        
+        # Initialize metrics lists
+        self.data_loss_list = []
+        self.accuracy_list = []
+        self.learning_rate_list = []
+        
+        # Early stopping setup
+        best_val_loss = float('inf')
+        patience_counter = 0
+        
         # establish batch parameters
         self.batch_mode = batch_mode.lower()
+        self.l2_lambda = l2_lambda
 
         if self.batch_mode == 'stochastic':
             self.batch_size = 1
@@ -369,12 +491,7 @@ class NeuralNetwork(object):
         self.learning_rate = learning_rate
         self.momentum = momentum
         
-        # establish stalled accuracy counters
-        increase_list = []
-        stall_counter = 0
-
-        # using a for loop, show the input data to architecture "iterations" number of times, slightly adjusting the weights
-        # and biases with each pass
+        # Training loop
         for iteration in range(iterations):
             inputs = X
 
@@ -388,61 +505,41 @@ class NeuralNetwork(object):
                 layer.weights = self.weights_list[idx]
                 layer.biases = self.biases_list[idx]
                 self.optimize(layer)
-
+            
             self.learning_rate_list.append(self.current_learning_rate)
-
-            # check for stall limit
-            if stall_limit:
-
-                # increment stall counter if percent accuracy increase is less than 1%
-                perc_increase = (self.accuracy_list[iteration] - self.accuracy_list[iteration - 1]) / self.accuracy_list[iteration - 1]
-                increase_list.append(perc_increase)
+            
+            # Validation pass if validation data is provided
+            if X_val is not None and y_val is not None:
+                val_output = self.feedforward(layer_list=layer_list, inputs=X_val, y_true=y_val)
+                val_loss = self.loss_function(val_output, y_val)
                 
-                # take rolling average of percent increases
-                tailsize = 100
-                if iteration < 100:
-                    tailsize = iteration
-
-                # increment counter if improvement is less than 1%, other wise reset counter
-                avg_improvement = np.mean(increase_list[-tailsize:])
-                if avg_improvement < 0.01 and iteration > 2 * stall_limit:
-                    stall_counter += 1
+                # Early stopping check
+                if val_loss < best_val_loss:
+                    best_val_loss = val_loss
+                    patience_counter = 0
+                    # Save best model weights
+                    self.best_weights = [layer.weights.copy() for layer in layer_list]
+                    self.best_biases = [layer.biases.copy() for layer in layer_list]
                 else:
-                    stall_counter = 0
+                    patience_counter += 1
                 
-                # halt loop if accuracy hasn't increased by more than 1 percent in x number of iterations in a row
-                if stall_counter == stall_limit:
-                    print(f'Rolling average accuracy has not increased by more than 1 percent for the last {stall_limit} iterations, so training was halted at iteration {iteration}.',
-                    f'Training accuracy: {self.accuracy_list[-1]}')
+                if patience_counter >= patience:
+                    print(f'Early stopping triggered. Validation loss hasn\'t improved for {patience} epochs.')
+                    print(f'Best validation loss: {best_val_loss:.4f}')
+                    # Restore best weights
+                    for layer, weights, biases in zip(layer_list, self.best_weights, self.best_biases):
+                        layer.weights = weights
+                        layer.biases = biases
                     break
-
+            
             self.iterations += 1
-
-        # save layer list with updated weights and biases as trained network
+        
+        # Save final network state
         self.trained_network = layer_list
 
-    def visualize_validation(self):
+    def predict(self, X: list) -> list:
         """
-        takes a trained network and displays plots for accuracy, loss, and learning rate against iteration count
-        """
-        if self.iterations == 0:
-            raise Exception("Network hasn't been trained yet. Call the .train() method of an instance of the NeuralNetwork class first.")
-        else:
-            x = range(self.iterations)
-            acc = round(self.accuracy_list[-1], 4)
-            loss = round(self.data_loss_list[-1], 4)
-
-            fig, ax = plt.subplots(3, sharex = True)
-            ax[0].plot(x, self.accuracy_list)
-            ax[0].title.set_text(f'Accuracy: {acc}')
-            ax[1].plot(x, self.data_loss_list)
-            ax[1].title.set_text(f'Data Loss: {loss}')
-            ax[2].plot(x, self.learning_rate_list)
-            ax[2].title.set_text('Learning Rate')
-            plt.show()
-
-    def predict(self, X):
-        """
+        Generate predictions for input samples
         """
         inputs = X
         # feed inputs forward through a trained network
@@ -451,97 +548,87 @@ class NeuralNetwork(object):
             layer.forward(inputs)
 
             # apply layer-specific activation function
-            layer.activate(layer.output)
+            layer.activate()
             inputs = layer.output
         
         results = np.argmax(layer.output, axis = 1)
         return results
 
-    def draw_network(self, ax, left, right, bottom, top, layer_sizes):
+    def draw_network(self, ax: plt.Axes, left: float, right: float, bottom: float, top: float, layer_sizes: list) -> None:
         """
-        Draw a neural network cartoon using matplotilb.
-        
-        params
-        ------------
-            - ax : matplotlib.axes.AxesSubplot
-                The axes on which to plot the cartoon (get e.g. by plt.gca())
-            - left : float
-                The center of the leftmost node(s) will be placed here
-            - right : float
-                The center of the rightmost node(s) will be placed here
-            - bottom : float
-                The center of the bottommost node(s) will be placed here
-            - top : float
-                The center of the topmost node(s) will be placed here
-            - layer_sizes : list of int
-                List of layer sizes, including input and output dimensionality
+        Draw a neural network cartoon using matplotlib with proper spacing.
         """
-        n_layers = len(self.layers())
-        layer_sizes = self.nodes_list
-        v_spacing = (top - bottom)/float(max(layer_sizes))
-        h_spacing = (right - left)/float(len(layer_sizes) - 1)
+        # Set figure aspect ratio to be square
+        ax.set_aspect('equal', adjustable='box')
         
-        # Input-Arrows
-        layer_top_0 = v_spacing * (layer_sizes[0] - 1)/2. + (top + bottom)/2.
-        for m in range(layer_sizes[0]):
-            plt.arrow(left - 0.18, layer_top_0 - m * v_spacing, 0.12, 0, lw=1, head_width=0.01, head_length=0.02)
+        # Calculate proper spacing
+        n_layers = len(layer_sizes)
+        max_neurons = max(layer_sizes)
         
-        # Nodes
-        for (n, layer_size), func in zip(enumerate(layer_sizes), self.activations_list):
-            layer_top = v_spacing * (layer_size - 1)/2. + (top + bottom)/2.
-            # Activation Function headers
-            if n != 0:
-                plt.text(n * h_spacing + left - 0.025, layer_top + 0.05, func)
+        # Adjust vertical spacing based on number of neurons
+        v_spacing = (top - bottom) / max(max_neurons + 1, 2)
+        h_spacing = (right - left) / max(n_layers + 1, 2)
+        
+        # Scale node radius based on spacing
+        node_radius = min(v_spacing, h_spacing) * 0.3
+        
+        # Draw nodes for each layer
+        for n, (layer_size, activation_func) in enumerate(zip(layer_sizes, self.activations_list)):
+            x = left + (n * h_spacing)
+            
+            # Center the layer vertically
+            layer_height = layer_size * v_spacing
+            layer_bottom = (top + bottom - layer_height) / 2
+            
+            # Draw activation function labels
+            if n != 0:  # Skip input layer
+                plt.text(x, top + node_radius/2, 
+                        activation_func or 'linear',
+                        ha='center', va='bottom',
+                        fontsize=8)
+            
+            # Draw nodes
             for m in range(layer_size):
-                circle = plt.Circle((n * h_spacing + left, layer_top - m * v_spacing), v_spacing/4.,
-                                    color='w', ec='k', zorder=4)
-                # input / output text
-                if n == 0:
-                    plt.text(left - 0.15, layer_top - m * v_spacing, r'$X_{' + str(m + 1) + '}$', fontsize=15)
-                elif (n_layers == 3) & (n == 1):
-                    plt.text(n * h_spacing + left + 0.00, layer_top - m * v_spacing + (v_spacing / 8. + 0.01 * v_spacing), r'$H_{' + str(m + 1) + '}$', fontsize=15)
-                elif n == n_layers:
-                    plt.text(n * h_spacing + left + 0.10, layer_top - m * v_spacing, r'$y_{' + str(m + 1) + '}$', fontsize=15)
+                y = layer_bottom + (m * v_spacing)
+                circle = plt.Circle((x, y), node_radius, 
+                                  color='white', ec='black', zorder=4)
                 ax.add_artist(circle)
+                
+                # Add labels
+                if n == 0:  # Input layer
+                    plt.text(x - node_radius*2, y, f'$X_{{{m+1}}}$', 
+                            ha='right', va='center')
+                elif n == n_layers - 1:  # Output layer
+                    plt.text(x + node_radius*2, y, f'$y_{{{m+1}}}$', 
+                            ha='left', va='center')
         
-        # Edges
-        for n, (layer_size_a, layer_size_b) in enumerate(zip(layer_sizes[:-1], layer_sizes[1:])):
-            layer_top_a = v_spacing * (layer_size_a - 1)/2. + (top + bottom)/2.
-            layer_top_b = v_spacing * (layer_size_b - 1)/2. + (top + bottom)/2.
-            for m in range(layer_size_a):
-                for o in range(layer_size_b):
-                    line = plt.Line2D([n * h_spacing + left, (n + 1) * h_spacing + left],
-                                    [layer_top_a - m * v_spacing, layer_top_b - o * v_spacing], c='k')
+        # Draw edges between layers
+        for n in range(n_layers - 1):
+            layer_size_a = layer_sizes[n]
+            layer_size_b = layer_sizes[n + 1]
+            
+            x_a = left + (n * h_spacing)
+            x_b = left + ((n + 1) * h_spacing)
+            
+            # Calculate y positions for both layers
+            layer_a_height = layer_size_a * v_spacing
+            layer_b_height = layer_size_b * v_spacing
+            layer_a_bottom = (top + bottom - layer_a_height) / 2
+            layer_b_bottom = (top + bottom - layer_b_height) / 2
+            
+            # Draw connections
+            for i in range(layer_size_a):
+                for j in range(layer_size_b):
+                    y_a = layer_a_bottom + (i * v_spacing)
+                    y_b = layer_b_bottom + (j * v_spacing)
+                    line = plt.Line2D([x_a, x_b], [y_a, y_b], 
+                                    color='gray', alpha=0.2, zorder=1)
                     ax.add_artist(line)
-        
-        # Output-Arrows
-        layer_top_0 = v_spacing * (layer_sizes[-1] - 1)/2. + (top + bottom)/2.
-        for m in range(layer_sizes[-1]):
-            plt.arrow(right + 0.015, layer_top_0 - m * v_spacing, 0.16 * h_spacing, 0, lw=1, head_width=0.01, head_length=0.02)
 
-    def visualize_network(self, savename = False):
-        fig = plt.figure(figsize=(9,9))
-        ax = fig.gca()
-        ax.axis('off')
-        self.draw_network(ax, 0.1, 0.9, 0.1, 0.9, self.nodes_list)
-        if savename != False:
-            if type(savename) != str:
-                raise Exception('savename parameter needs to either be a string or set to False.')
-            plt.savefig(savename + '.png')
-        plt.show()
-
-    def save(self, filepath):
+    def save(self, filepath: str) -> None:
         """
         save weights and biases unique to this network's architecture
 
-        params
-        ------------
-        filepath (str) : a .json file path  to which weights and biases can be saved
-
-        returns
-        -----------
-        file (.json) : a dictionary of weights and biases that correspond with the structure of this network
-            to be reloaded in, skipping training time
         """
         network = {}
         for i, layer in enumerate(self.trained_network):
@@ -555,19 +642,10 @@ class NeuralNetwork(object):
         with open(filepath, 'w') as outfile:
             json.dump(network, outfile, sort_keys=True, indent=4)
 
-    def load(self, filepath):
+    def load(self, filepath: str) -> None:
         """
         load in and attach weights and biases to an architecture to skip training time
 
-        params
-        ------------
-        filepath (str) : a .json file, presumably the output of the .save() method, containing a dictionary of 
-            weights and biases lists for each layer
-        
-        updates
-        -----------
-        self.trained_model : attaches the weights and biases loaded in to the appropriate synapses/nodes of each 
-            layer in the model
         """
         with open(filepath, 'r') as outfile:
             network = json.load(outfile)
@@ -580,3 +658,122 @@ class NeuralNetwork(object):
             layer_list.append(layer)
 
         self.trained_network = layer_list
+
+    def visualize_network(self, savename: Optional[str] = False) -> None:
+        """
+        Visualize the neural network architecture.
+        """
+        # Calculate aspect ratio based on network shape
+        n_layers = len(self.layers())
+        max_neurons = max(self.nodes_list)
+        aspect_ratio = n_layers / max_neurons
+        
+        # Set figure size maintaining aspect ratio
+        base_size = 8
+        fig = plt.figure(figsize=(base_size, base_size))
+        ax = fig.gca()
+        ax.axis('off')
+        
+        self.draw_network(ax, 0.1, 0.9, 0.1, 0.9, self.nodes_list)
+        
+        if savename:
+            if isinstance(savename, str):
+                plt.savefig(f'{savename}.png', bbox_inches='tight')
+            else:
+                raise ValueError('savename must be a string or False')
+        
+        plt.tight_layout()
+        plt.show()
+
+    def visualize_validation(self) -> None:
+        """
+        Visualizes training metrics over iterations.
+        """
+        if self.iterations == 0:
+            raise Exception("Network hasn't been trained yet.")
+        
+        x = range(self.iterations)
+        fig, ax = plt.subplots(3, sharex=True, figsize=(10, 12))
+        
+        # Plot data loss
+        ax[0].plot(x, self.data_loss_list, label='Training Loss')
+        ax[0].set_title('Loss')
+        ax[0].legend()
+        
+        # Plot accuracy
+        ax[1].plot(x, self.accuracy_list, label='Training Accuracy')
+        ax[1].set_title('Accuracy')
+        ax[1].legend()
+        
+        # Plot learning rate
+        ax[2].plot(x, self.learning_rate_list)
+        ax[2].set_title('Learning Rate')
+        
+        plt.tight_layout()
+        plt.show()
+
+    def visualize_predictions(self, X: np.ndarray, y: np.ndarray, title: str = "Model Predictions") -> None:
+        """
+        Visualize model predictions for 2D input data.
+        
+        Parameters
+        ----------
+        X : ndarray, shape (n_samples, 2)
+            2D input features to visualize
+        y : ndarray, shape (n_samples,)
+            True labels for coloring the points
+        title : str, default="Model Predictions"
+            Plot title
+        
+        Notes
+        -----
+        - Creates a contour plot of decision boundaries
+        - Overlays scatter plot of actual data points
+        - Only works for 2D input data
+        """
+        if X.shape[1] != 2:
+            raise ValueError("This visualization only works for 2D input data")
+        
+        # Create a mesh grid
+        x_min, x_max = X[:, 0].min() - 0.5, X[:, 0].max() + 0.5
+        y_min, y_max = X[:, 1].min() - 0.5, X[:, 1].max() + 0.5
+        xx, yy = np.meshgrid(np.arange(x_min, x_max, 0.02),
+                            np.arange(y_min, y_max, 0.02))
+        
+        # Get predictions for all mesh points
+        Z = self.predict(np.c_[xx.ravel(), yy.ravel()])
+        Z = Z.reshape(xx.shape)
+        
+        # Plot decision boundary
+        plt.figure(figsize=(10, 8))
+        plt.contourf(xx, yy, Z, alpha=0.4)
+        
+        # Plot data points
+        scatter = plt.scatter(X[:, 0], X[:, 1], c=y, alpha=0.8)
+        plt.colorbar(scatter)
+        
+        plt.xlabel('Feature 1')
+        plt.ylabel('Feature 2')
+        plt.title(title)
+        plt.show()
+
+@dataclass
+class TrainingConfig:
+    learning_rate: float = 1.0
+    decay: float = 0.0
+    momentum: Optional[float] = None
+    batch_mode: str = 'batch mode'
+    batch_size: Optional[int] = None
+    patience: int = 5
+    l2_lambda: float = 0.0
+
+@dataclass
+class MinimalConfig:
+    learning_rate: float = 0.1  # smaller than default
+    decay: float = 0.0
+    momentum: Optional[float] = None
+    batch_mode: str = 'batch mode'  # simplest processing mode
+    batch_size: Optional[int] = None
+    patience: int = None  # disable early stopping
+    l2_lambda: float = 0.0  # no regularization
+

@@ -1,57 +1,116 @@
-<a href="http://www.kaleighcoxwriter.com"><img src="https://github.com/gcox32/neuralnet/blob/master/assets/logo.png" title="grantcoxdatasci" alt="grantcoxdatasci" width="200"></a>
+<a href="http://www.letmedemo.com"><img src="https://github.com/gcox32/neuralnet/blob/master/assets/logo.png" title="grantcoxdatasci" alt="grantcoxdatasci" width="200"></a>
 
 # Build a Neural Network from the Ground Up
 
-> Your model should do what you want it to do.
+> A Python implementation of a neural network built from scratch, with both a core library and web interface.
 
-[![Build Status](http://img.shields.io/travis/badges/badgerbadgerbadger.svg?style=flat-square)](https://travis-ci.org/badges/badgerbadgerbadger) [![Coverage Status](http://img.shields.io/coveralls/badges/badgerbadgerbadger.svg?style=flat-square)](https://coveralls.io/r/badges/badgerbadgerbadger) [![Code Climate](http://img.shields.io/codeclimate/github/badges/badgerbadgerbadger.svg?style=flat-square)](https://codeclimate.com/github/badges/badgerbadgerbadger) [![Github Issues](http://githubbadges.herokuapp.com/badges/badgerbadgerbadger/issues.svg?style=flat-square)](https://github.com/badges/badgerbadgerbadger/issues) [![Pending Pull-Requests](http://githubbadges.herokuapp.com/badges/badgerbadgerbadger/pulls.svg?style=flat-square)](https://github.com/badges/badgerbadgerbadger/pulls)
+## Features
 
----
-### Table of Contents
-- [Installation](#installation)
-- [Features](#features)
-- [Contributing](#contributing)
-- [Team](#team)
-- [FAQ](#faq)
-- [Support](#support)
-- [License](#license)
----
+- Custom neural network implementation with:
+  - Configurable layer architecture via JSON
+  - Multiple activation functions (ReLU, Leaky ReLU, ELU, Sigmoid, Tanh, Softmax)
+  - Various optimizers (SGD, Adam, AdaGuard)
+  - Support for different loss functions (MSE, Categorical/Binary Cross-entropy)
+  - L2 regularization
+  - Early stopping
+  - Network visualization tools
+
+- Flask web interface for:
+  - Model training
+  - File uploads
+  - Status monitoring
+ 
 
 ## Installation
 
-- All the `code` required to get started
-- Images of what it should look like
+1. Clone the repository:
 
-### Requirements
+```bash
+git clone https://github.com/gcox32/neuralnet.git
+```
 
-## Features
+2. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
 ## Usage (Optional)
-## Documentation (Optional)
-## Tests (Optional)
+
+### Core Library
+
+```python
+from src import DenseLayer, NeuralNetwork
+
+# Load architecture from JSON file
+with open('data/architecture.json', 'r') as file:
+    architecture = json.load(file)
+
+# Create neural network instance
+net = NeuralNetwork(architecture=architecture, loss='categorical crossentropy', optimizer='sgd')
+
+# Train the network
+net.train(X_train, y_train, iterations=1000, learning_rate=0.01, decay=0.0, momentum=0.9)
+
+# Make predictions
+predictions = net.predict(X_test)
+
+# Visualize the network
+net.visualize_network()
+
+# Visualize the validation accuracy
+net.visualize_validation()  
+
+# Visualize the predictions
+net.visualize_predictions(X_test, y_test)
+
+# Save the model
+net.save('data/model.pkl')
+
+# Load the model
+net = NeuralNetwork.load('data/model.pkl')
+
+```
+
+### Web Interface
+
+yea, this is not even close to being done.
+
+```bash
+python app.py
+```
+
+## Documentation
+
+The network supports:
+
+- **Activation Functions**: ReLU, Leaky ReLU, ELU, Sigmoid, Tanh, Softmax
+- **Loss Functions**: MSE, Categorical Cross-entropy, Binary Cross-entropy
+- **Optimizers**: SGD, Adam, AdaGuard
+- **Training Modes**: Batch, Mini-batch, Stochastic
+- **Regularization**: L2 regularization
+- **Early Stopping**: Based on validation loss
+
+## Tests
+
+seems like a good idea.
 
 ## Contributing
 
-> To get started...
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-### Step 1
+## License
 
-- **Option 1**
-    - 🍴 Fork this repo!
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-- **Option 2**
-    - 👯 Clone this repo to your local machine using `https://github.com/gcox32/neuralnet.git`
+## Contact
 
-### Step 2
+Grant Cox - [@Grant07549375](https://twitter.com/Grant07549375)
 
-- **HACK AWAY!** 🔨🔨🔨
-
-### Step 3
-
-- 🔃 Create a new pull request using <a href="https://github.com/gcox32/neuralnet/compare/" target="_blank">`https://github.com/gcox32/neuralnet/compare/`</a>.
-
----
-
----
+Project Link: [https://github.com/gcox32/neuralnet](https://github.com/gcox32/neuralnet)
 
 ## FAQ
 
@@ -64,23 +123,7 @@
 
 Reach out to me at one of the following places!
 
-- Website at 
+- Website at <a href="https://www.letmedemo.com" target="_blank">`letmedemo.com`</a>
 - Twitter at <a href="https://twitter.com/Grant07549375" target="_blank">`@Grant07549375`</a>
-- Insert more social links here.
-
----
-
-## Donations
-
-- There are worse places your money could go.
-
-<div>
-<form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_top">
-<input type="hidden" name="cmd" value="_s-xclick" />
-<input type="hidden" name="hosted_button_id" value="8Q5GJYTCGC4LL" />
-<input type="image" src="https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif" border="0" name="submit" title="PayPal - The safer, easier way to pay online!" alt="Donate with PayPal button" />
-<img alt="" border="0" src="https://www.paypal.com/en_US/i/scr/pixel.gif" width="1" height="1" />
-</form>
-</div>
 
 ---
