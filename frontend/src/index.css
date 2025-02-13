@@ -76,10 +76,20 @@ button:focus-visible {
 }
 
 @keyframes valid-flash {
-    0% { border-color: #4caf50; border-width: 3px; }
-    100% { border-color: rgba(0, 0, 0, 0.5); border-width: 1px; }
+    0% { 
+        outline: #4caf50 4px solid;
+        box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+    }
+    100% { 
+        outline: rgba(0, 0, 0, 0.23) 1px solid;
+        box-shadow: none;
+    }
 }
 
-.valid-flash {
-    animation: valid-flash 2s ease-out;
+.json-editor .MuiOutlinedInput-root {
+    transition: all 0.2s ease-out;
+}
+
+.json-editor.valid-flash .MuiOutlinedInput-root {
+    animation: valid-flash 1s ease-out;
 }

@@ -13,6 +13,7 @@ import AddIcon from '@mui/icons-material/Add'
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward'
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward'
 import DeleteIcon from '@mui/icons-material/Delete'
+import { NetworkArchitecture, ACTIVATION_OPTIONS } from '../types/network'
 
 interface LayerConfig {
   n_inputs: number
@@ -21,11 +22,9 @@ interface LayerConfig {
 }
 
 interface LayerEditorProps {
-  architecture: { [key: string]: LayerConfig }
-  onChange: (newArchitecture: { [key: string]: LayerConfig }) => void
+  architecture: NetworkArchitecture
+  onChange: (newArchitecture: NetworkArchitecture) => void
 }
-
-const ACTIVATION_OPTIONS = ['relu', 'sigmoid', 'tanh', 'softmax', 'linear', null]
 
 export const LayerEditor = ({ architecture, onChange }: LayerEditorProps) => {
   const handleLayerChange = (layerName: string, field: keyof LayerConfig, value: any) => {
@@ -93,11 +92,14 @@ export const LayerEditor = ({ architecture, onChange }: LayerEditorProps) => {
       }
     })
 
-    onChange(newArchitecture)
+    onChange(newArchitecture as NetworkArchitecture)
   }
 
   return (
-    <Box sx={{ mt: 3 }}>
+    <Box sx={{ 
+      height: '100%',
+      pr: 2  // Add padding for scrollbar
+    }}>
       <Typography variant="h6" gutterBottom>
         Layer Configuration
       </Typography>
@@ -173,7 +175,7 @@ export const LayerEditor = ({ architecture, onChange }: LayerEditorProps) => {
         startIcon={<AddIcon />}
         variant="outlined"
         onClick={addLayer}
-        sx={{ mt: 2 }}
+        sx={{ mt: 2, mb: 2 }}  // Add bottom margin
       >
         Add Hidden Layer
       </Button>

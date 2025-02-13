@@ -10,14 +10,7 @@ import {
 import { NetworkDiagram } from './NetworkDiagram'
 import { LayerEditor } from './LayerEditor'
 import { validateArchitecture } from '../utils/architectureValidation'
-
-interface NetworkArchitecture {
-    [key: string]: {
-        n_inputs: number
-        n_neurons: number
-        activation: string | null
-    }
-}
+import { NetworkArchitecture } from '../types/network'
 
 const defaultArchitecture: NetworkArchitecture = {
     input: {
@@ -68,21 +61,65 @@ export const NetworkArchitectureEditor = () => {
         setJsonText(value)
         
         try {
+            // Only parse the JSON to update the visual editor
             const parsed = JSON.parse(value)
             const normalized = normalizeArchitectureLayers(parsed)
             setArchitecture(normalized)
-            
-            const validationErrors = validateArchitecture(normalized)
-            if (validationErrors.length > 0) {
-                setJsonError(validationErrors.map(err => err.message).join('\n'))
-            } else {
-                setJsonError('')
-                const editor = document.querySelector('.json-editor')
-                editor?.classList.add('valid-flash')
-                setTimeout(() => editor?.classList.remove('valid-flash'), 1000)
-            }
+            setJsonError('')
         } catch (err) {
-            setJsonError(err instanceof Error ? err.message : 'Invalid JSON format')
+            // Only show JSON syntax errors
+            setJsonError('Invalid JSON syntax')
+        }
+    }
+
+    const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+        if (event.key === 'Enter' || event.key === 'Tab' || event.key === 'Backspace' || event.key === 'Delete' || event.key === 'Space') {
+            event.preventDefault();
+            const textarea = (event.target as HTMLElement).querySelector('textarea') || event.target as HTMLTextAreaElement;
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            let newValue = textarea.value;
+            let newCursorPosition = start;
+            
+            switch (event.key) {
+                case 'Enter':
+                    newValue = textarea.value.substring(0, start) + '\n' + textarea.value.substring(end);
+                    newCursorPosition = start + 1;
+                    break;
+                case 'Tab':
+                    newValue = textarea.value.substring(0, start) + '  ' + textarea.value.substring(end);
+                    newCursorPosition = start + 2;
+                    break;
+                case 'Space':
+                    newValue = textarea.value.substring(0, start) + ' ' + textarea.value.substring(end);
+                    newCursorPosition = start + 1;
+                    break;
+                case 'Backspace':
+                    if (start === end && start > 0) {
+                        newValue = textarea.value.substring(0, start - 1) + textarea.value.substring(end);
+                        newCursorPosition = start - 1;
+                    } else {
+                        newValue = textarea.value.substring(0, start) + textarea.value.substring(end);
+                        newCursorPosition = start;
+                    }
+                    break;
+                case 'Delete':
+                    if (start === end && start < textarea.value.length) {
+                        newValue = textarea.value.substring(0, start) + textarea.value.substring(start + 1);
+                    } else {
+                        newValue = textarea.value.substring(0, start) + textarea.value.substring(end);
+                    }
+                    newCursorPosition = start;
+                    break;
+                default: return;
+            }
+            
+            setJsonText(newValue);
+            
+            // Set cursor position
+            setTimeout(() => {
+                textarea.selectionStart = textarea.selectionEnd = newCursorPosition;
+            }, 0);
         }
     }
 
@@ -114,15 +151,20 @@ export const NetworkArchitectureEditor = () => {
                     setJsonError(validationErrors.map(err => err.message).join('\n'))
                 } else {
                     setJsonError('')
-                    const editor = document.querySelector('.json-editor')
-                    editor?.classList.add('valid-flash')
-                    setTimeout(() => editor?.classList.remove('valid-flash'), 1000)
+                    validArchitectureFeedback()
                 }
             } catch (err) {
                 setJsonError('Failed to parse imported file')
             }
         }
         reader.readAsText(file)
+    }
+
+    const validArchitectureFeedback = () => {
+        console.log('Validation passed')
+        const editor = document.querySelector('.json-editor')
+        editor?.classList.add('valid-flash')
+        setTimeout(() => editor?.classList.remove('valid-flash'), 1000)
     }
 
     const calculateEditorRows = () => {
@@ -141,9 +183,11 @@ export const NetworkArchitectureEditor = () => {
                 display: 'flex',
                 flexDirection: { xs: 'column', md: 'row' },
                 gap: 3,
-                mb: 3
+                mb: 3,
+                height: '600px',  // Fixed height for both editors
+                paddingTop: 2
             }}>
-                <Box sx={{ flex: 1 }}>
+                <Box sx={{ flex: 1, height: '100%' }}>
                     <TextField
                         className="json-editor"
                         fullWidth
@@ -152,22 +196,29 @@ export const NetworkArchitectureEditor = () => {
                         variant="outlined"
                         value={jsonText}
                         onChange={handleJsonChange}
+                        onKeyDown={handleKeyDown}
                         error={Boolean(jsonError)}
                         helperText={jsonError}
                         sx={{
                             fontFamily: 'monospace',
-                            '& .MuiInputBase-input': {
-                                fontFamily: 'monospace',
-                            },
                             height: '100%',
                             '& .MuiInputBase-root': {
                                 height: '100%'
+                            },
+                            '& .MuiInputBase-input': {
+                                fontFamily: 'monospace',
+                                height: '100% !important',
+                                overflowY: 'auto !important'
                             }
                         }}
                     />
                 </Box>
 
-                <Box sx={{ flex: 1 }}>
+                <Box sx={{ 
+                    flex: 1,
+                    height: '100%',
+                    overflowY: 'auto'
+                }}>
                     <LayerEditor
                         architecture={architecture}
                         onChange={setArchitecture}
@@ -215,6 +266,7 @@ export const NetworkArchitectureEditor = () => {
                             setJsonError(errors.map(err => err.message).join('\n'))
                         } else {
                             setJsonError('')
+                            validArchitectureFeedback()
                         }
                     }}
                 >

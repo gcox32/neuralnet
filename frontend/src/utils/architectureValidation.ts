@@ -1,3 +1,5 @@
+import { ACTIVATION_OPTIONS } from '../types/network'
+
 interface ValidationError {
   message: string
   path?: string
@@ -18,18 +20,48 @@ export const validateArchitecture = (architecture: any): ValidationError[] => {
   Object.entries(architecture).forEach(([layerName, layer]: [string, any]) => {
     const basePath = `layers.${layerName}`
 
-    if (!layer.n_inputs || typeof layer.n_inputs !== 'number') {
-      errors.push({ 
-        message: 'n_inputs must be a positive number',
-        path: `${basePath}.n_inputs`
-      })
+    // Check required keys
+    const requiredKeys = ['n_inputs', 'n_neurons', 'activation']
+    requiredKeys.forEach(key => {
+      if (!(key in layer)) {
+        errors.push({
+          message: `Missing required key "${key}" in layer "${layerName}"`,
+          path: `${basePath}.${key}`
+        })
+      }
+    })
+
+    // Validate n_inputs
+    if ('n_inputs' in layer) {
+      if (typeof layer.n_inputs !== 'number' || layer.n_inputs <= 0) {
+        errors.push({ 
+          message: 'n_inputs must be a positive number',
+          path: `${basePath}.n_inputs`
+        })
+      }
     }
 
-    if (!layer.n_neurons || typeof layer.n_neurons !== 'number') {
-      errors.push({ 
-        message: 'n_neurons must be a positive number',
-        path: `${basePath}.n_neurons`
-      })
+    // Validate n_neurons
+    if ('n_neurons' in layer) {
+      if (typeof layer.n_neurons !== 'number' || layer.n_neurons <= 0) {
+        errors.push({ 
+          message: 'n_neurons must be a positive number',
+          path: `${basePath}.n_neurons`
+        })
+      }
+    }
+
+    // Validate activation
+    if ('activation' in layer) {
+      const validActivations = ACTIVATION_OPTIONS.filter(option => option !== null)
+      const activation = layer.activation?.toLowerCase() || null
+      
+      if (activation !== null && !validActivations.includes(activation)) {
+        errors.push({
+          message: `Invalid activation function "${layer.activation}". Must be one of: ${validActivations.join(', ')} or null`,
+          path: `${basePath}.activation`
+        })
+      }
     }
 
     // Validate layer connections
