@@ -1,7 +1,14 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { TrainingMetrics } from './components/TrainingMetrics'
-import { Box, Container, Typography, Paper } from '@mui/material'
+import {
+  Box,
+  Typography,
+  Paper,
+} from '@mui/material'
+import './index.css'
+import Layout from './components/Layout'
+import { NetworkArchitectureEditor } from './components/NetworkArchitectureEditor'
 
 interface TrainingData {
   iterations: number[]
@@ -35,40 +42,33 @@ function App() {
       }
     }
 
-    // Test the server connection
-    axios.get('http://127.0.0.1:5000/api/test', {
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      withCredentials: false
-    })
-      .then(response => console.log('Server test:', response.data))
-      .catch(err => console.error('Server test failed:', err))
-
     fetchMetrics()
   }, [])
 
   return (
-    <Container maxWidth="lg">
-      <Box sx={{ my: 4 }}>
-        <Typography variant="h4" component="h1" gutterBottom>
-          Neural Network Training Dashboard
-        </Typography>
-        
-        <Paper elevation={3} sx={{ p: 3, my: 2 }}>
-          {error && (
-            <Typography color="error">{error}</Typography>
-          )}
-          {metrics && (
-            <TrainingMetrics data={metrics} />
-          )}
-          {!metrics && !error && (
+    <Layout>
+      <NetworkArchitectureEditor />
+      <Paper
+        elevation={3}
+        sx={{
+          p: 3,
+          my: 2,
+          backgroundColor: 'background.paper'
+        }}
+      >
+        {error && (
+          <Typography color="error" sx={{ mb: 2 }}>{error}</Typography>
+        )}
+        {metrics && (
+          <TrainingMetrics data={metrics} />
+        )}
+        {!metrics && !error && (
+          <Box sx={{ textAlign: 'center', py: 3 }}>
             <Typography>Loading metrics...</Typography>
-          )}
-        </Paper>
-      </Box>
-    </Container>
+          </Box>
+        )}
+      </Paper>
+    </Layout>
   )
 }
 
